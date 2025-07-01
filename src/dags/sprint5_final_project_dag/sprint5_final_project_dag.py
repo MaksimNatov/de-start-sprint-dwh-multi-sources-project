@@ -33,39 +33,54 @@ def get_api_couriers_to_stg():
                            user=user,
                            password=password,
                            sslmode='require')
-    with conn:
         with conn.cursor() as cur:
-            cur.execute('''SELECT sws.workflow_settings 
-                            FROM stg.srv_wf_settings sws 
-                            WHERE sws.workflow_key = 'api_couriers_to_stg_worflow'
-                        ''')
-            offset = cur.fetchone()[0]['last_offset']
-            url = f'https://d5d04q7d963eapoepsqr.apigw.yandexcloud.net/couriers?offset={offset}'
-            response = requests.get(url, headers=headers)
-            data = list(json.loads(response.content))
-            new_offset = {'last_offset': len(data) + offset}
-            new_offset_json = json.dumps(new_offset)
-            now_date = datetime.now()
-            for row in data:
-                cur.execute(
-                    """
-                        INSERT INTO stg.api_couriers(object_value, update_ts)
-                        VALUES (%(object_value)s, %(update_ts)s)
-                        ON CONFLICT (object_value) DO UPDATE
-                        SET
-                            update_ts = EXCLUDED.update_ts                   
-                    """,
-                    {
-                        "object_value": str(row),
-                        "update_ts": now_date
-                    })
+            # устанавливаем offset в ноль для следующей загрузки            
+            drop_offset = {'last_offset': 0}
+            drop_offset = json.dumps(drop_offset)
             cur.execute("""UPDATE stg.srv_wf_settings
-                        SET workflow_settings = %(new_offset)s
-                        WHERE workflow_key = 'api_couriers_to_stg_worflow'
+                            SET workflow_settings = %(drop_offset)s
+                            WHERE workflow_key = 'api_couriers_to_stg_worflow'
+                            """,
+                            {
+                                "drop_offset": drop_offset
+                            })
+            now_date = datetime.now()
+            data = ['start']
+            while len(data) > 0:
+            # в соответствии с комментариями к задаче прохоимся циклом                        
+                cur.execute('''SELECT sws.workflow_settings 
+                                FROM stg.srv_wf_settings sws 
+                                WHERE sws.workflow_key = 'api_couriers_to_stg_worflow'
+                            ''')
+                offset = cur.fetchone()[0]['last_offset']
+                url = f'https://d5d04q7d963eapoepsqr.apigw.yandexcloud.net/couriers?offset={offset}'
+                response = requests.get(url, headers=headers)
+                data = list(json.loads(response.content))
+                new_offset = {'last_offset': len(data) + offset}
+                new_offset_json = json.dumps(new_offset)
+                # Выход из цикла, если данные закончились
+                if len(data) == 0:
+                    break
+                for row in data:
+                    cur.execute(
+                        """
+                            INSERT INTO stg.api_couriers(object_value, update_ts)
+                            VALUES (%(object_value)s, %(update_ts)s)
+                            ON CONFLICT (object_value) DO UPDATE
+                            SET
+                                update_ts = EXCLUDED.update_ts                   
                         """,
                         {
-                            "new_offset": new_offset_json
+                            "object_value": str(row),
+                            "update_ts": now_date
                         })
+                cur.execute("""UPDATE stg.srv_wf_settings
+                            SET workflow_settings = %(new_offset)s
+                            WHERE workflow_key = 'api_couriers_to_stg_worflow'
+                            """,
+                            {
+                                "new_offset": new_offset_json
+                            })
 
     conn.close
 
@@ -83,38 +98,54 @@ def get_api_deliveries_to_stg():
     from_dt = '2025-06-20 00:00:00'
     with conn:
         with conn.cursor() as cur:
-            cur.execute('''SELECT sws.workflow_settings 
-                            FROM stg.srv_wf_settings sws 
-                            WHERE sws.workflow_key = 'api_deliveries_to_stg_worflow'
-                        ''')
-            offset = cur.fetchone()[0]['last_offset']
-            url = f'https://d5d04q7d963eapoepsqr.apigw.yandexcloud.net/deliveries?offset={offset}&from={from_dt}&sort_field=date'
-            response = requests.get(url, headers=headers)
-            data = list(json.loads(response.content))
-            new_offset = {'last_offset': len(data) + offset}
-            new_offset_json = json.dumps(new_offset)
-            now_date = datetime.now()
-            for row in data:
-                cur.execute(
-                    """
-                        INSERT INTO stg.api_deliveries(object_value, update_ts)
-                        VALUES (%(object_value)s, %(update_ts)s)
-                        ON CONFLICT (object_value) DO UPDATE
-                        SET
-                            update_ts = EXCLUDED.update_ts                   
-                    """,
-                    {
-                        "object_value": str(row),
-                        "update_ts": now_date
-                    })
+            # устанавливаем offset в ноль для следующей загрузки
+            drop_offset = {'last_offset': 0}
+            drop_offset = json.dumps(drop_offset)
             cur.execute("""UPDATE stg.srv_wf_settings
-                        SET workflow_settings = %(new_offset)s
-                        WHERE workflow_key = 'api_deliveries_to_stg_worflow'
+                            SET workflow_settings = %(drop_offset)s
+                            WHERE workflow_key = 'api_deliveries_to_stg_worflow'
+                            """,
+                            {
+                                "drop_offset": drop_offset
+                            })
+
+            now_date = datetime.now()
+            data = ['start']
+            # в соответствии с комментариями к задаче прохоимся циклом
+            while len(data) > 0:
+                cur.execute('''SELECT sws.workflow_settings 
+                                FROM stg.srv_wf_settings sws 
+                                WHERE sws.workflow_key = 'api_deliveries_to_stg_worflow'
+                            ''')
+                offset = cur.fetchone()[0]['last_offset']
+                url = f'https://d5d04q7d963eapoepsqr.apigw.yandexcloud.net/deliveries?offset={offset}&from={from_dt}&sort_field=date'
+                response = requests.get(url, headers=headers)
+                data = list(json.loads(response.content))
+                new_offset = {'last_offset': len(data) + offset}
+                new_offset_json = json.dumps(new_offset)
+                # Выход из цикла, если данные закончились
+                if len(data) == 0:
+                    break
+                for row in data:
+                    cur.execute(
+                        """
+                            INSERT INTO stg.api_deliveries(object_value, update_ts)
+                            VALUES (%(object_value)s, %(update_ts)s)
+                            ON CONFLICT (object_value) DO UPDATE
+                            SET
+                                update_ts = EXCLUDED.update_ts                   
                         """,
                         {
-                            "new_offset": new_offset_json
+                            "object_value": str(row),
+                            "update_ts": now_date
                         })
-
+                cur.execute("""UPDATE stg.srv_wf_settings
+                            SET workflow_settings = %(new_offset)s
+                            WHERE workflow_key = 'api_deliveries_to_stg_worflow'
+                            """,
+                            {
+                                "new_offset": new_offset_json
+                            })
     conn.close
 
 
